@@ -48,7 +48,7 @@ df = data[
 # TOP-N FILTER
 # ---------------------------
 top_diag = (
-    df.groupby("icd_code")["admissions"]
+    df.groupby("diagnosis_group")["admissions"]
     .sum()
     .nlargest(top_n)
     .index
