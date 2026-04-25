@@ -199,7 +199,7 @@ with tab3:
     st.header("Diagnosis Burden & Structural Shift")
 
     # ---------------------------
-    # VIEW MODE SELECTOR
+    # VIEW MODE
     # ---------------------------
     view_mode = st.sidebar.radio(
         "Treemap View Mode",
@@ -211,14 +211,18 @@ with tab3:
         ['elderly_ratio', 'hospital_pressure_index', 'emergency_rate']
     )
 
+    # ---------------------------
+    # CLEAN DATA
+    # ---------------------------
     treemap_df = df.copy()
 
     treemap_df = treemap_df.dropna(subset=['covid_phase', 'diagnosis_group', 'admissions'])
+
     treemap_df['admissions'] = pd.to_numeric(treemap_df['admissions'], errors='coerce')
     treemap_df = treemap_df[treemap_df['admissions'] > 0]
 
     # ---------------------------
-    # HUMAN-READABLE LABELS
+    # PHASE LABELS
     # ---------------------------
     phase_map = {
         'pre_covid': 'Pre-COVID (Before 2020)',
@@ -228,18 +232,16 @@ with tab3:
 
     treemap_df['phase_label'] = treemap_df['covid_phase'].map(phase_map)
 
-    # ---------------------------
-    # % OF PHASE
-    # ---------------------------
-    treemap_df['percent_of_phase'] = (
-        treemap_df['admissions'] /
-        treemap_df.groupby('phase_label')['admissions'].transform('sum')
-    ) * 100
-
     # =========================================================
-    # 🔵 COMBINED VIEW
+    # 🔵 COMBINED VIEW (GLOBAL PERCENT)
     # =========================================================
     if view_mode == "Combined":
+
+        total_all = treemap_df['admissions'].sum()
+
+        treemap_df['percent_global'] = (
+            treemap_df['admissions'] / total_all
+        ) * 100
 
         fig = px.treemap(
             treemap_df,
@@ -249,7 +251,7 @@ with tab3:
             color_continuous_scale='RdBu',
             hover_data={
                 'group_description': True,
-                'percent_of_phase': ':.2f',
+                'percent_global': ':.2f',
                 'admissions': ':,'
             }
         )
@@ -261,7 +263,7 @@ with tab3:
         fig.data[0].customdata = np.stack(
             (
                 treemap_df['group_description'],
-                treemap_df['percent_of_phase']
+                treemap_df['percent_global']
             ),
             axis=-1
         )
@@ -271,26 +273,36 @@ with tab3:
         st.plotly_chart(fig, use_container_width=True)
 
     # =========================================================
-    # 🟢 SPLIT VIEW (KEY UPGRADE)
+    # 🟢 SPLIT VIEW (PHASE-NORMALIZED → SUM = 100%)
     # =========================================================
     else:
 
         st.subheader("Pre-COVID vs COVID Peak vs Post-COVID")
 
-        phases = treemap_df['phase_label'].unique()
-
         cols = st.columns(3)
 
-        for i, phase in enumerate([
+        phase_order = [
             'Pre-COVID (Before 2020)',
             'COVID Peak (2020–2021)',
             'Post-COVID Recovery (2022+)'
-        ]):
+        ]
 
-            phase_df = treemap_df[treemap_df['phase_label'] == phase]
+        for i, phase in enumerate(phase_order):
+
+            phase_df = treemap_df[treemap_df['phase_label'] == phase].copy()
 
             if phase_df.empty:
+                cols[i].write(f"No data for {phase}")
                 continue
+
+            # ---------------------------
+            # 🔴 CRITICAL FIX: NORMALISE WITHIN PHASE
+            # ---------------------------
+            phase_total = phase_df['admissions'].sum()
+
+            phase_df['percent_of_phase'] = (
+                phase_df['admissions'] / phase_total
+            ) * 100
 
             fig = px.treemap(
                 phase_df,
@@ -328,13 +340,19 @@ with tab3:
     # INTERPRETATION
     # ---------------------------
     st.markdown("""
-    **How to interpret:**
+    **How to interpret this visualization:**
 
-    - Block size → Absolute admissions  
-    - Percentage → Share within that phase  
-    - Colour → Selected system pressure metric  
+    - **Block size** → Absolute number of admissions  
+    - **Percentage** → Relative share of admissions  
+    - **Colour** → Selected system pressure metric  
 
-    **Split view enables direct comparison of structural shifts across phases.**
+    **Combined View:**  
+    Shows overall contribution across all phases.
+
+    **Split View:**  
+    Each treemap sums to **100%**, showing how hospital demand is distributed *within each phase*.
+
+    This distinction is critical for identifying **structural changes in healthcare demand during COVID**, rather than just changes in total volume.
     """)
 
 # =========================================================
