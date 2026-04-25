@@ -54,7 +54,7 @@ top_diag = (
     .index
 )
 
-df = df[df.icd_code.isin(top_diag)]
+df = df[df.diagnosis_group.isin(top_diag)]
 
 # ---------------------------
 # 🔴 ANOMALY DETECTION
@@ -70,7 +70,7 @@ df['is_anomaly'] = df['z_score'].abs() > 2
 # ---------------------------
 selected_diag = st.sidebar.multiselect(
     "Highlight Diagnosis",
-    options=sorted(df.icd_code.unique())
+    options=sorted(df.diagnosis_group.unique())
 )
 
 # ---------------------------
