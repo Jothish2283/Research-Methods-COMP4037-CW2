@@ -76,11 +76,12 @@ selected_diag = st.sidebar.multiselect(
 # ---------------------------
 # TABS
 # ---------------------------
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🌟 System Dynamics",
     "🔁 Admission Flow",
     "🌳 Diagnosis Burden",
-    "📊 Distribution & Anomalies"
+    "📊 Distribution & Anomalies",
+    "📘 Derived Metrics"
 ])
 
 # =========================================================
@@ -109,16 +110,40 @@ with tab1:
         ['year', 'hospital_pressure_index', 'elderly_ratio']
     )
 
+    # ---------------------------
+    # 🔴 FIX: SCALE DATA FOR VISIBILITY
+    # ---------------------------
+    plot_df = df.copy()
+
+    # Normalize each feature (critical for readability)
+    for col in selected_features:
+        if col in plot_df.columns:
+            min_val = plot_df[col].min()
+            max_val = plot_df[col].max()
+            if max_val - min_val != 0:
+                plot_df[col] = (plot_df[col] - min_val) / (max_val - min_val)
+
     fig = px.parallel_coordinates(
-        df,
+        plot_df,
         dimensions=selected_features,
         color=color_feature,
         color_continuous_scale=px.colors.diverging.Tealrose
     )
 
-    fig.update_layout(height=600)
+    # ---------------------------
+    # 🔴 FIX: IMPROVE LAYOUT
+    # ---------------------------
+    fig.update_layout(
+        height=750,  # bigger height
+        margin=dict(l=80, r=80, t=60, b=60),
+        font=dict(size=12)
+    )
 
     st.plotly_chart(fig, use_container_width=True)
+
+    st.info("""
+    Note: Features are normalized (0–1) for comparability across dimensions.
+    """)
 
 # =========================================================
 # 🔁 SANKEY TAB
@@ -183,7 +208,12 @@ with tab3:
         path=['covid_phase', 'diagnosis_group'],
         values='admissions',
         color=color_metric,
-        color_continuous_scale='RdBu'
+        color_continuous_scale='RdBu',
+        hover_data={
+        'group_description': True,   # show full name on hover
+        'diagnosis_group': False,    # avoid duplication
+        'year': False
+    }
     )
 
     fig.update_layout(height=650)
@@ -221,6 +251,68 @@ with tab4:
         )
     else:
         st.write("No significant anomalies detected.")
+
+with tab5:
+
+    st.header("Derived Metrics Explanation")
+
+    st.markdown("""
+    This dashboard uses several derived variables to capture **system-level hospital pressure** during COVID.
+
+    ---
+    """)
+
+    st.subheader("1. Emergency Rate")
+    st.latex(r"Emergency\ Rate = \frac{Emergency\ Admissions}{Total\ Admissions}")
+    st.write("""
+    Represents dependency on urgent care pathways.  
+    High values indicate reduced elective capacity.
+    """)
+
+    st.subheader("2. Elderly Ratio")
+    st.latex(r"Elderly\ Ratio = \frac{Age\ 75+}{Total\ Admissions}")
+    st.write("""
+    Captures demographic pressure.  
+    Higher values indicate more resource-intensive patients.
+    """)
+
+    st.subheader("3. Mean Length of Stay (LOS)")
+    st.write("""
+    Average duration of hospitalisation.  
+    Longer stays → reduced bed turnover → system strain.
+    """)
+
+    st.subheader("4. Mean Waiting Time")
+    st.write("""
+    Indicates backlog and service delays.  
+    Important during post-COVID recovery.
+    """)
+
+    st.subheader("5. Hospital Pressure Index (HPI)")
+    st.latex(r"HPI = Emergency\ Rate \times Mean\ LOS \times Elderly\ Ratio")
+    st.write("""
+    Composite indicator capturing **multi-dimensional strain**:
+    
+    - Emergency dependence  
+    - Patient complexity (age)  
+    - Resource usage (length of stay)  
+
+    High HPI → systemic stress concentration.
+    """)
+
+    st.markdown("---")
+
+    st.subheader("Why These Metrics Matter")
+
+    st.write("""
+    These features allow detection of **non-obvious structural shifts**:
+    
+    - Not just *more patients*, but *different types of patients*
+    - Transition from elective → emergency-heavy system
+    - Increasing dominance of elderly, long-stay cases
+    
+    This is critical to understanding **COVID's true impact beyond raw admissions**.
+    """)
 
 # ---------------------------
 # OPTIONAL: HIGHLIGHT SELECTED DIAGNOSIS
