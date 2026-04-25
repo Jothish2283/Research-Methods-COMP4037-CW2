@@ -157,7 +157,7 @@ with tab2:
         'admissions': 'sum'
     }).reset_index()
 
-    labels = ['Pre-COVID', 'COVID Peak', 'Post-COVID', 'Emergency', 'Non-Emergency']
+    labels = ['Pre-COVID (Before 2020)', 'COVID Peak (2020–2021)', 'Post-COVID (2022+)', 'Emergency', 'Non-Emergency']
 
     source = [0,1,2,0,1,2]
     target = [3,3,3,4,4,4]
@@ -198,6 +198,14 @@ with tab3:
 
     st.header("Diagnosis Burden & Structural Shift")
 
+    # ---------------------------
+    # VIEW MODE SELECTOR
+    # ---------------------------
+    view_mode = st.sidebar.radio(
+        "Treemap View Mode",
+        ["Combined", "Split by COVID Phase"]
+    )
+
     color_metric = st.selectbox(
         "Color Metric",
         ['elderly_ratio', 'hospital_pressure_index', 'emergency_rate']
@@ -206,60 +214,127 @@ with tab3:
     treemap_df = df.copy()
 
     treemap_df = treemap_df.dropna(subset=['covid_phase', 'diagnosis_group', 'admissions'])
-
     treemap_df['admissions'] = pd.to_numeric(treemap_df['admissions'], errors='coerce')
     treemap_df = treemap_df[treemap_df['admissions'] > 0]
 
-    # 🔴 HUMAN-READABLE PHASE LABELS
-    treemap_df['phase_label'] = treemap_df['covid_phase'].map({
+    # ---------------------------
+    # HUMAN-READABLE LABELS
+    # ---------------------------
+    phase_map = {
         'pre_covid': 'Pre-COVID (Before 2020)',
         'covid_peak': 'COVID Peak (2020–2021)',
         'post_covid': 'Post-COVID Recovery (2022+)'
-    })
+    }
 
-    # 🔴 % OF PHASE
+    treemap_df['phase_label'] = treemap_df['covid_phase'].map(phase_map)
+
+    # ---------------------------
+    # % OF PHASE
+    # ---------------------------
     treemap_df['percent_of_phase'] = (
         treemap_df['admissions'] /
         treemap_df.groupby('phase_label')['admissions'].transform('sum')
     ) * 100
 
-    fig = px.treemap(
-        treemap_df,
-        path=['phase_label', 'diagnosis_group'],
-        values='admissions',
-        color=color_metric,
-        color_continuous_scale='RdBu',
-        hover_data={
-            'group_description': True,
-            'percent_of_phase': ':.2f',
-            'admissions': ':,'
-        }
-    )
+    # =========================================================
+    # 🔵 COMBINED VIEW
+    # =========================================================
+    if view_mode == "Combined":
 
-    fig.update_traces(
-        texttemplate="%{label}<br>%{value:,}<br>%{customdata[1]:.1f}%"
-    )
+        fig = px.treemap(
+            treemap_df,
+            path=['phase_label', 'diagnosis_group'],
+            values='admissions',
+            color=color_metric,
+            color_continuous_scale='RdBu',
+            hover_data={
+                'group_description': True,
+                'percent_of_phase': ':.2f',
+                'admissions': ':,'
+            }
+        )
 
-    fig.data[0].customdata = np.stack(
-        (
-            treemap_df['group_description'],
-            treemap_df['percent_of_phase']
-        ),
-        axis=-1
-    )
+        fig.update_traces(
+            texttemplate="%{label}<br>%{value:,}<br>%{customdata[1]:.1f}%"
+        )
 
-    fig.update_layout(height=700)
+        fig.data[0].customdata = np.stack(
+            (
+                treemap_df['group_description'],
+                treemap_df['percent_of_phase']
+            ),
+            axis=-1
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(height=700)
 
+        st.plotly_chart(fig, use_container_width=True)
+
+    # =========================================================
+    # 🟢 SPLIT VIEW (KEY UPGRADE)
+    # =========================================================
+    else:
+
+        st.subheader("Pre-COVID vs COVID Peak vs Post-COVID")
+
+        phases = treemap_df['phase_label'].unique()
+
+        cols = st.columns(3)
+
+        for i, phase in enumerate([
+            'Pre-COVID (Before 2020)',
+            'COVID Peak (2020–2021)',
+            'Post-COVID Recovery (2022+)'
+        ]):
+
+            phase_df = treemap_df[treemap_df['phase_label'] == phase]
+
+            if phase_df.empty:
+                continue
+
+            fig = px.treemap(
+                phase_df,
+                path=['diagnosis_group'],
+                values='admissions',
+                color=color_metric,
+                color_continuous_scale='RdBu',
+                hover_data={
+                    'group_description': True,
+                    'percent_of_phase': ':.2f',
+                    'admissions': ':,'
+                }
+            )
+
+            fig.update_traces(
+                texttemplate="%{label}<br>%{customdata[1]:.1f}%"
+            )
+
+            fig.data[0].customdata = np.stack(
+                (
+                    phase_df['group_description'],
+                    phase_df['percent_of_phase']
+                ),
+                axis=-1
+            )
+
+            fig.update_layout(
+                height=500,
+                title=phase
+            )
+
+            cols[i].plotly_chart(fig, use_container_width=True)
+
+    # ---------------------------
+    # INTERPRETATION
+    # ---------------------------
     st.markdown("""
-    **How to read this plot:**
-    
-    - Block size → Total admissions (absolute burden)  
-    - Percentage → Share of hospital activity within that phase  
+    **How to interpret:**
+
+    - Block size → Absolute admissions  
+    - Percentage → Share within that phase  
     - Colour → Selected system pressure metric  
-    
-    This allows identification of **structural shifts in healthcare demand**, not just volume changes.
+
+    **Split view enables direct comparison of structural shifts across phases.**
     """)
 
 # =========================================================
