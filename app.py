@@ -203,22 +203,67 @@ with tab3:
         ['elderly_ratio', 'hospital_pressure_index', 'emergency_rate']
     )
 
+    # ---------------------------
+    # 🔴 CLEAN + PREP DATA
+    # ---------------------------
+    treemap_df = df.copy()
+
+    treemap_df = treemap_df.dropna(subset=['covid_phase', 'diagnosis_group', 'admissions'])
+
+    treemap_df['admissions'] = pd.to_numeric(treemap_df['admissions'], errors='coerce')
+
+    treemap_df = treemap_df[treemap_df['admissions'] > 0]
+
+    # ---------------------------
+    # 🔴 COMPUTE % OF PARENT
+    # ---------------------------
+    treemap_df['percent_of_phase'] = (
+        treemap_df['admissions'] /
+        treemap_df.groupby('covid_phase')['admissions'].transform('sum')
+    ) * 100
+
+    # ---------------------------
+    # 🔴 TREEMAP
+    # ---------------------------
     fig = px.treemap(
-        df,
+        treemap_df,
         path=['covid_phase', 'diagnosis_group'],
         values='admissions',
         color=color_metric,
         color_continuous_scale='RdBu',
         hover_data={
-        'group_description': True,   # show full name on hover
-        'diagnosis_group': False,    # avoid duplication
-        'year': False
-    }
+            'group_description': True,
+            'percent_of_phase': ':.2f',
+            'admissions': ':,'
+        }
     )
 
-    fig.update_layout(height=650)
+    # ---------------------------
+    # 🔴 SHOW % LABELS INSIDE BLOCKS
+    # ---------------------------
+    fig.update_traces(
+        texttemplate="%{label}<br>%{customdata[1]:.1f}%",
+        textfont_size=12
+    )
+
+    # IMPORTANT: ensure customdata includes percent
+    fig.data[0].customdata = np.stack(
+        (
+            treemap_df['group_description'],
+            treemap_df['percent_of_phase']
+        ),
+        axis=-1
+    )
+
+    fig.update_layout(height=700)
 
     st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("""
+    **Interpretation:**  
+    Block size shows total admissions, while percentages reveal **relative dominance within each COVID phase**.  
+    This exposes shifts in healthcare prioritisation — not just volume changes.
+    """)
 
 # =========================================================
 # 📊 DISTRIBUTION + ANOMALY TAB
