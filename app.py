@@ -180,7 +180,7 @@ with tab3:
 
     fig = px.treemap(
         df,
-        path=['covid_phase', 'icd_code'],
+        path=['covid_phase', 'diagnosis_group'],
         values='admissions',
         color=color_metric,
         color_continuous_scale='RdBu'
@@ -216,7 +216,7 @@ with tab4:
 
     if not anomalies.empty:
         st.dataframe(
-            anomalies[['icd_code','year','hospital_pressure_index','z_score']]
+            anomalies[['diagnosis_group','year','hospital_pressure_index','z_score']]
             .sort_values('z_score', ascending=False)
         )
     else:
@@ -228,13 +228,13 @@ with tab4:
 if selected_diag:
     st.subheader("Selected Diagnosis Overview")
 
-    highlight_df = df[df.icd_code.isin(selected_diag)]
+    highlight_df = df[df.diagnosis_group.isin(selected_diag)]
 
     fig = px.line(
         highlight_df,
         x='year',
         y='hospital_pressure_index',
-        color='icd_code',
+        color='diagnosis_group',
         markers=True
     )
 
