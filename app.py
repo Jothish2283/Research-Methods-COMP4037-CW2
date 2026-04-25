@@ -196,38 +196,36 @@ with tab2:
 # =========================================================
 with tab3:
 
-    st.header("Diagnosis Burden & Aging")
+    st.header("Diagnosis Burden & Structural Shift")
 
     color_metric = st.selectbox(
         "Color Metric",
         ['elderly_ratio', 'hospital_pressure_index', 'emergency_rate']
     )
 
-    # ---------------------------
-    # 🔴 CLEAN + PREP DATA
-    # ---------------------------
     treemap_df = df.copy()
 
     treemap_df = treemap_df.dropna(subset=['covid_phase', 'diagnosis_group', 'admissions'])
 
     treemap_df['admissions'] = pd.to_numeric(treemap_df['admissions'], errors='coerce')
-
     treemap_df = treemap_df[treemap_df['admissions'] > 0]
 
-    # ---------------------------
-    # 🔴 COMPUTE % OF PARENT
-    # ---------------------------
+    # 🔴 HUMAN-READABLE PHASE LABELS
+    treemap_df['phase_label'] = treemap_df['covid_phase'].map({
+        'pre_covid': 'Pre-COVID (Before 2020)',
+        'covid_peak': 'COVID Peak (2020–2021)',
+        'post_covid': 'Post-COVID Recovery (2022+)'
+    })
+
+    # 🔴 % OF PHASE
     treemap_df['percent_of_phase'] = (
         treemap_df['admissions'] /
-        treemap_df.groupby('covid_phase')['admissions'].transform('sum')
+        treemap_df.groupby('phase_label')['admissions'].transform('sum')
     ) * 100
 
-    # ---------------------------
-    # 🔴 TREEMAP
-    # ---------------------------
     fig = px.treemap(
         treemap_df,
-        path=['covid_phase', 'diagnosis_group'],
+        path=['phase_label', 'diagnosis_group'],
         values='admissions',
         color=color_metric,
         color_continuous_scale='RdBu',
@@ -238,15 +236,10 @@ with tab3:
         }
     )
 
-    # ---------------------------
-    # 🔴 SHOW % LABELS INSIDE BLOCKS
-    # ---------------------------
     fig.update_traces(
-        texttemplate="%{label}<br>%{customdata[1]:.1f}%",
-        textfont_size=12
+        texttemplate="%{label}<br>%{value:,}<br>%{customdata[1]:.1f}%"
     )
 
-    # IMPORTANT: ensure customdata includes percent
     fig.data[0].customdata = np.stack(
         (
             treemap_df['group_description'],
@@ -260,9 +253,13 @@ with tab3:
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("""
-    **Interpretation:**  
-    Block size shows total admissions, while percentages reveal **relative dominance within each COVID phase**.  
-    This exposes shifts in healthcare prioritisation — not just volume changes.
+    **How to read this plot:**
+    
+    - Block size → Total admissions (absolute burden)  
+    - Percentage → Share of hospital activity within that phase  
+    - Colour → Selected system pressure metric  
+    
+    This allows identification of **structural shifts in healthcare demand**, not just volume changes.
     """)
 
 # =========================================================
